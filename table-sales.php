@@ -250,18 +250,18 @@ function table_sales_dropdown($n) {
   return $ret;
 }
 
-// FIXME: Take this out when error gone.
-add_action('activated_plugin','save_error');
-function save_error(){
-    update_option('plugin_error',  ob_get_contents());
-}
+// Useful for debugging plugin install errors.
+/* add_action('activated_plugin','save_error'); */
+/* function save_error(){ */
+/*     update_option('plugin_error',  ob_get_contents()); */
+/* } */
 
 add_shortcode('table-sales', 'table_sales');
 function table_sales() {
   $ret = '';
 
-  // FIXME: Take this out when error gone.
-  $ret .= get_option('plugin_error');
+  // For debugging. See function save_error() above.
+  /* $ret .= get_option('plugin_error'); */
 
   $ret .= '<style type="text/css"> #table-1 { fill:red; }</style>';
   $layout = plugins_url('/img/tables.svg', __FILE__);

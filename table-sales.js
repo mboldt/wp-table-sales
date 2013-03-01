@@ -174,13 +174,13 @@ function table_sales_precheckout() {
         } else {
             order[tablenum]["cost"] = TABLE_SALES_PER_TABLE;
         }
-        order[tablenum]["lineitem"] = "\tTable " + tablenum + " (" + quantity + (soldindividually ? " seats" : " table") + ")\t$" + order[tablenum]["cost"] + "\n";
+        order[tablenum]["lineitem"] = "Table " + tablenum + " (" + quantity + (soldindividually ? " seats" : " table") + ")\t$" + order[tablenum]["cost"];
     }
     // Print out the line items, add up the total, and confirm with user.
     var total = 0;
     var msg = "Your order:\n";
     for (var tablenum in order) {
-        msg += order[tablenum]["lineitem"];
+        msg += "\t" + order[tablenum]["lineitem"] + "\n";
         total += order[tablenum]["cost"];
     }
     msg += "Total: $" + total + "\n\nBy Click OK to place your reservation and proceed to PayJunction for checkout.";
@@ -193,11 +193,27 @@ function table_sales_precheckout() {
 function table_sales_checkout(data) {
     if ('errormessage' in data) {
         alert(data.errormessage);
+        location.reload();
         return false;
     }
-    // TODO: Add when ready.
     // Get PayJunction crap ready.
-    // jQuery('#table-sales-cart').submit();
+    var form = jQuery('#table-sales-cart');
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "billingFirstName").attr("value", data.buyer.firstname));
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "billingLastName").attr("value", data.buyer.lastname));
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "billingEmail").attr("value", data.buyer.email));
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "billingPhone").attr("value", data.buyer.phone));
+
+    var totalcost = 0;
+    var description_lines = [];
+    for (var tablenum in data.order) {
+        totalcost += parseInt(data.order[tablenum].cost);
+        description_lines.push(data.order[tablenum].lineitem.replace(/\t/, ": "));
+    }
+    description = description_lines.join(', ');
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "description").attr("value", description));
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "quantity").attr("value", "1"));
+    form.append(jQuery("<input>").attr("type", "hidden").attr("name", "price").attr("value", totalcost));
+    form.submit();
 }
 
 function table_sales_mark_paid(res, val) {
