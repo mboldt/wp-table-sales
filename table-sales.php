@@ -209,11 +209,31 @@ function table_sales_cancel() {
 
   global $wpdb;
   $table_res = $wpdb->prefix . "table_sales_res";
-  $table_tables = $wpdb->prefix . "table_sales_res";
-  $table_item = $wpdb->prefix . "table_sales_res";
-  // Delete the res.
+  $table_tables = $wpdb->prefix . "table_sales_tables";
+  $table_item = $wpdb->prefix . "table_sales_item";
+
+  // Delete the items and add back availability.
+  $items = $wpdb->get_results("SELECT * FROM $table_item WHERE res_id = $res");
+  
+  foreach ($items as $item) {
+    $table = $wpdb->get_row("SELECT * FROM $table_tables WHERE number = $item->table_id");
+    $available = $item->quantity + $table->available;
+    if (!$table->individual) {
+      $available = $table->total;
+    }
+    // Add back availability.
+    $wpdb->update($table_tables,
+                  array('available' => $available),
+                  array('number' => $table->number),
+                  "%d",
+                  "%d");
+  }
   // Delete the items.
-  // Add back availability.
+  $wpdb->query($wpdb->prepare("DELETE FROM $table_item WHERE res_id = %d",
+                              $res));
+  // Delete the res.
+  $wpdb->query($wpdb->prepare("DELETE FROM $table_res WHERE id = %d",
+                              $res));
   print json_encode(array("res" => $res));
   exit;
 }
@@ -303,8 +323,13 @@ function table_sales_manage() {
 
   $reservations = $wpdb->get_results("SELECT * FROM  $table_res ORDER BY time");
   $ret .= "<table>";
-  $ret .= "<tr><th>Name</th><th>Email</th><th>Phone</th><th>Order</th><th>Paid?</th><th>Mark Paid</th><th>Cancel</th></tr>";
+  $ret .= "<tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Order</th><th>Paid?</th><th>Mark Paid</th><th>Cancel</th></tr>";
   foreach ($reservations as $res) {
+    $items = $wpdb->get_results("SELECT * FROM $table_item WHERE res_id = $res->id");
+    $order = '';
+    foreach($items as $item) {
+      $order .= sprintf('%d at Table %d<br />', $item->quantity, $item->table_id);
+    }
     $paidattrs = sprintf('id="table-sales-%d-paid" style="color: %s"',
                          $res->id, $res->paid ? "green" : "red");
     $paid = $res->paid ? 'Paid' : 'Unpaid';
@@ -314,10 +339,10 @@ function table_sales_manage() {
                     $res->id,
                     $res->paid ? 0 : 1,
                     $res->paid ? "Mark Unpaid" : "Mark Paid");
-    $cancel = sprintf('<input type="button" onclick="table_sales_cancel_res(%d)" value="Cancel" />',
+    $cancel = sprintf('<input type="button" onclick="table_sales_cancel(%d)" value="Cancel" />',
                       $res->id);
     $trid = sprintf('id="table-sales-res-%d"', $res->id);
-    $ret .= "<tr $trid><td>$res->name</td><td>$res->email</td><td>$res->phone</td><td>Order</td><td $paidattrs>$paid</td><td>$mark</td><td>$cancel</td></tr>";
+    $ret .= "<tr $trid><td>$res->id</td><td>$res->name</td><td>$res->email</td><td>$res->phone</td><td>$order</td><td $paidattrs>$paid</td><td>$mark</td><td>$cancel</td></tr>";
   }
   $ret .= "</table>";
   return $ret;
