@@ -45,9 +45,9 @@ function table_sales_install () {
   $sql = "CREATE TABLE $res_table (
   id MEDIUMINT(9) NOT NULL AUTO_INCREMENT,
   time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  name varchar(100) NOT NULL,
-  phone varchar(20),
-  email varchar(50),
+  name varchar(200) NOT NULL,
+  phone varchar(100),
+  email varchar(100),
   paid BOOLEAN DEFAULT FALSE,
   UNIQUE KEY (id)
     );
@@ -103,13 +103,70 @@ function table_sales_tables() {
 
 add_action('wp_ajax_table_sales_reserve', 'table_sales_reserve');
 add_action('wp_ajax_nopriv_table_sales_reserve', 'table_sales_reserve');
-function table_sales_reserve($order) {
+function table_sales_reserve() {
   global $wpdb;
+  if (!isset($_POST['buyer']) || !isset($_POST['order'])) {
+    print json_encode(array("errormessage" => "Internal error. Please try again."));
+    exit;
+  }
+  $order = $_POST['order'];
+  $buyer = $_POST['buyer'];
+
   $table_tables = $wpdb->prefix . "table_sales_tables";
   $table_res = $wpdb->prefix . "table_sales_res";
   $table_item = $wpdb->prefix . "table_sales_item";
+
+  /* print json_encode(array("order" => print_r($order, true), "buyer" => print_r($buyer, true))); */
+  /* exit; */
+
+  // TODO: acquire lock.
   $tables = $wpdb->get_results("SELECT * FROM  $table_tables ORDER BY number");
-  print json_encode($order);
+  // Verify availability.
+  foreach($order as $tablenum => $tableorder) {
+    if ($tables[$tablenum-1]->available < $tableorder['quantity']) {
+      print json_encode(array("errormessage" => "Sorry, Table $tablenum ran out of seats. Please try again."));
+      exit;
+    }
+  }
+
+  // Everything available. Start committing.
+  // First, make a reservation entry.
+  $success = $wpdb->insert($table_res,
+                           array("name" => sprintf("%s %s", $buyer['firstname'], $buyer['lastname']),
+                                 "phone" => $buyer['phone'],
+                                 "email" => $buyer['email']));
+  $resid = $wpdb->insert_id;
+  if (!$success) {
+    print json_encode(array("errormessage" => "There was an error recording your reservation. Please try again."));
+    exit;
+  }
+  // Make a row for each line item, and update table availability.
+  foreach($order as $tablenum => $tableorder) {
+    // Line item insert.
+    $success = $wpdb->insert($table_item,
+                             array('res_id' => $resid,
+                                   'table_id' => $tablenum,
+                                   'quantity'=> $tableorder['quantity']));
+    if (!$success) {
+      print json_encode(array("errormessage" => "There was an error recording your reservation. Please try again."));
+      exit;
+    }
+    // Table availability update.
+    $seatsleft = $tables[$tablenum-1]->individual ?
+      $tables[$tablenum-1]->available - $tableorder['quantity']
+      : 0;
+    $success = $wpdb->update($table_tables,
+                             array('available' => $seatsleft),
+                             array('number' => $tablenum),
+                             "%d",
+                             "%d");
+    if ($success != 1) {
+      print json_encode(array("errormessage" => "There was an error recording your reservation. Please try again."));
+      exit;
+    }
+  }
+  // TODO: release lock.
+  print json_encode($_POST);
   exit;
 }
 
@@ -144,13 +201,14 @@ function table_sales() {
   /* $ret .= '<script type="text/javascript">function tableclick(evt) { alert(\"hi\"); }</script>'; */
   /* $ret .= "<a href=\"$layout\"><img src=\"$layout\" width=\"500px\" /></a>"; */
   /* $ret .= file_get_contents($layout); */
-  $ret .= "<img src=\"$layout\" width=\"700px\" />";
-  // TODO: re-enable paypal.
-  /* <form name="table-sales-cart" id="table-sales-cart" action="https://www.paypal.com/cgi-bin/webscr" method="post" onsubmit="return table_sales_checkout()" target="paypal"> */
 
+  $ret .= "<img src=\"$layout\" width=\"700px\" />";
   $ret .= '
 <div id="table-sales">
-<form name="table-sales-cart" id="table-sales-cart" action="#" method="post" onsubmit="return table_sales_checkout()" target="paypal">
+<form name="table-sales-cart" id="table-sales-cart" action="https://www.payjunctionlabs.com/trinity/quickshop/add_to_cart.action" method="post">
+  <input type="hidden" name="store" value="pj-qs-01" />
+  <input type="hidden" name="need_to_ship" value="No" />
+  <input type="hidden" name="need_to_tax" value="No" />
   <table id="table-sales-table">
   <thead>
   <tr><th>Table #</th>
@@ -177,11 +235,12 @@ function table_sales() {
   $ret .= '</table>';
   $ret .= '<table>';
   $ret .= '<tr>';
-  $ret .= '<td><label id="table-sales-name-label" for="table-sales-name">Name: </label><input type="text" length="100" id="table-sales-name" /></td>';
+  $ret .= '<td><label id="table-sales-firstname-label" for="table-sales-firstname">First name: </label><input type="text" length="100" id="table-sales-firstname" /></td>';
+  $ret .= '<td><label id="table-sales-lastname-label" for="table-sales-lastname">Last name: </label><input type="text" length="100" id="table-sales-lastname" /></td>';
   $ret .= '<td><label id="table-sales-email-label"for="table-sales-email">Email: </label><input type="text" length="100" id="table-sales-email" /></td>';
   $ret .= '<td><label id="table-sales-phone-label"for="table-sales-phone">Phone: </label><input type="text" length="100" id="table-sales-phone" /></td>';
   $ret .= '</tr>';
-  $ret .= '<tr><td colspan="3" style="text-align:right"><input type="submit" value="Checkout via PayJunction"></td></tr>';
+  $ret .= '<tr><td colspan="4" style="text-align:right"><input type="button" onclick="table_sales_precheckout()" value="Checkout via PayJunction"></td></tr>';
   $ret .= '</table></form></div>';
   return $ret;
 }

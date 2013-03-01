@@ -9,12 +9,6 @@ jQuery(document).ready(
             function() { return table_sales_update_row(this); });
         });
 
-function table_sales_get_table(number) {
-    jQuery.getJSON(table_sales_script.ajaxurl, function(data) {
-        return data[0];
-    });
-}
-
 function table_sales_add_row() {
     jQuery("#table-sales-table tr:last").before(table_sales_new_row());
 }
@@ -64,7 +58,6 @@ function table_sales_update_row(select) {
         return;
     }
     jQuery.getJSON(table_sales_script.ajaxurl, {action: 'table_sales_tables'}, function(data, st) {
-        // var table = table_sales_get_table(tablenum);
         var table = data[tablenum - 1]; // Hackish...should reallly search for table['number'] == tablenum.
         var available = parseInt(table['available']);
         var total = parseInt(table['total']);
@@ -84,20 +77,26 @@ function table_sales_update_row(select) {
         col.text(individual ? "$100 per Seat" : "$1000 per Table");
         // Quantity
         col = col.next();
-        var max = individual ? available : 1;
+        var max = individual ? available : Math.min(available, 1);
         col.html(jQuery("<input>").attr("type", "number").attr("min", "0").attr("max", max).attr("value", "0"));
     });
 }
 
-function table_sales_checkout() {
+function table_sales_precheckout() {
     var order = {};
     var orderingsomething = false;
-    var name = jQuery('#table-sales-name').val();
+    var firstname = jQuery('#table-sales-firstname').val();
+    var lastname = jQuery('#table-sales-lastname').val();
     var email = jQuery('#table-sales-email').val();
     var phone = jQuery('#table-sales-phone').val();
-    if (!name) {
-        jQuery("#table-sales-name-label").css("color", "red");
-        alert("Please enter your name.");
+    if (!firstname || !lastname) {
+        if (!firstname) {
+            jQuery("#table-sales-firstname-label").css("color", "red");
+        }
+        if (!lastname) {
+            jQuery("#table-sales-lastname-label").css("color", "red");
+        }
+        alert("Please enter your first and last name.");
         return false;
     }
     if (!email && !phone) {
@@ -107,7 +106,8 @@ function table_sales_checkout() {
         return false;
     }
     var buyer = {};
-    buyer["name"] = name;
+    buyer["firstname"] = firstname;
+    buyer["lastname"] = lastname;
     buyer["phone"] = phone;
     buyer["email"] = email;
     // Just collect the quantity from the form in this loop because we
@@ -116,6 +116,10 @@ function table_sales_checkout() {
         jQuery(".table-sales-table-select"),
         function(i, select) {
             var tablenum = select.value;
+            // Skip invalid table number.
+            if (tablenum <= 0 || tablenum > TABLE_SALES_NUM_TABLES) {
+                return;
+            }
             var qinput = jQuery(select).closest("tr").find("input");
             var quantity = parseInt(qinput.val());
             if (tablenum in order) {
@@ -172,7 +176,7 @@ function table_sales_checkout() {
         }
         order[tablenum]["lineitem"] = "\tTable " + tablenum + " (" + quantity + (soldindividually ? " seats" : " table") + ")\t$" + order[tablenum]["cost"] + "\n";
     }
-    // Print out the line items, and add up the total, and confirm with user.
+    // Print out the line items, add up the total, and confirm with user.
     var total = 0;
     var msg = "Your order:\n";
     for (var tablenum in order) {
@@ -183,5 +187,15 @@ function table_sales_checkout() {
     if (!confirm(msg)) {
         return false;
     }
-    // Get paypal crap ready.
+    jQuery.post(table_sales_script.ajaxurl, {action: 'table_sales_reserve', buyer: buyer, order: order}, table_sales_checkout, 'json');
+}
+
+function table_sales_checkout(data) {
+    if ('errormessage' in data) {
+        alert(data.errormessage);
+        return false;
+    }
+    // TODO: Add when ready.
+    // Get PayJunction crap ready.
+    // jQuery('#table-sales-cart').submit();
 }
