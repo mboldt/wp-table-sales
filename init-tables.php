@@ -1,5 +1,5 @@
 <?php
-function get_tables() {
+function init_tables() {
   $tables = array (
                    1 => array("total-seats" => 10,
                               "available-seats" => 10, /* TODO: pull from somewhere. */

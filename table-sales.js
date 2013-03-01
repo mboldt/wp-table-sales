@@ -1,6 +1,7 @@
 var TABLE_SALES_NUM_TABLES = 42;
 var TABLE_SALES_PER_SEAT = 100;
 var TABLE_SALES_PER_TABLE = 1000;
+var tables = null;
 
 jQuery(document).ready(
     function() {
@@ -9,11 +10,9 @@ jQuery(document).ready(
         });
 
 function table_sales_get_table(number) {
-    return {
-        "total-seats": 8,
-        "available-seats": 5,
-        "sold-individually": true,
-    };
+    jQuery.getJSON(table_sales_script.ajaxurl, function(data) {
+        return data[0];
+    });
 }
 
 function table_sales_add_row() {
@@ -64,28 +63,53 @@ function table_sales_update_row(select) {
         col.text("-");
         return;
     }
-    var table = table_sales_get_table(tablenum);
-    var col = jQuery(select).closest("td");
-    // Total seats
-    col = col.next();
-    col.text(table["total-seats"]);
-    // Available seats
-    col = col.next();
-    col.text(table["available-seats"]);
-    // Seats sold individually
-    col = col.next();
-    col.text(table["sold-individually"] ? "Yes" : "No");
-    // Cost
-    col = col.next();
-    col.text(table["sold-individually"] ? "$100 per Seat" : "$1000 per Table");
-    // Quantity
-    col = col.next();
-    col.html(jQuery("<input>").attr("type", "number").attr("min", "0").attr("max", table["available-seats"]).attr("value", "0"));
+    jQuery.getJSON(table_sales_script.ajaxurl, {action: 'table_sales_tables'}, function(data, st) {
+        // var table = table_sales_get_table(tablenum);
+        var table = data[tablenum - 1]; // Hackish...should reallly search for table['number'] == tablenum.
+        var available = parseInt(table['available']);
+        var total = parseInt(table['total']);
+        var individual = parseInt(table['individual']);
+        var col = jQuery(select).closest("td");
+        // Total seats
+        col = col.next();
+        col.text(total);
+        // Available seats
+        col = col.next();
+        col.text(available);
+        // Seats sold individually
+        col = col.next();
+        col.text(individual ? "Yes" : "No");
+        // Cost
+        col = col.next();
+        col.text(individual ? "$100 per Seat" : "$1000 per Table");
+        // Quantity
+        col = col.next();
+        var max = individual ? available : 1;
+        col.html(jQuery("<input>").attr("type", "number").attr("min", "0").attr("max", max).attr("value", "0"));
+    });
 }
 
 function table_sales_checkout() {
     var order = {};
     var orderingsomething = false;
+    var name = jQuery('#table-sales-name').val();
+    var email = jQuery('#table-sales-email').val();
+    var phone = jQuery('#table-sales-phone').val();
+    if (!name) {
+        jQuery("#table-sales-name-label").css("color", "red");
+        alert("Please enter your name.");
+        return false;
+    }
+    if (!email && !phone) {
+        jQuery("#table-sales-email-label").css("color", "red");
+        jQuery("#table-sales-phone-label").css("color", "red");
+        alert("Please enter your email address and/or phone number.");
+        return false;
+    }
+    var buyer = {};
+    buyer["name"] = name;
+    buyer["phone"] = phone;
+    buyer["email"] = email;
     // Just collect the quantity from the form in this loop because we
     // can't break all the way out and return failure.
     jQuery.each(
@@ -116,9 +140,6 @@ function table_sales_checkout() {
             location.reload();
             return false;
         }
-        var table = table_sales_get_table(tablenum);
-        var available = table["available-seats"];
-        var soldindividually = table["sold-individually"];
         var quantity = order[tablenum]['quantity'];
         // Nonsensical quantity.
         if (quantity < 0) {
@@ -131,15 +152,17 @@ function table_sales_checkout() {
             delete order[tablenum];
             continue;
         }
+        var soldindividually = tablenum > 20; // HACK! Cheating...should check in DB.
+        // [mboldt:20130228] Move this check to *right* before we add reservation to DB.
         // If quantity more than available seats, error out.
-        if (quantity > available) {
-            if (soldindividually) {
-                alert("Sorry, Table " + tablenum + " only has " + available + " seats left so you may not buy " + q + ".");
-            } else {
-                alert("Sorry, Table " + tablenum + " is already sold.");
-            }
-            return false;
-        }
+        // if (quantity > available) {
+        //     if (soldindividually) {
+        //         alert("Sorry, Table " + tablenum + " only has " + available + " seats left so you may not buy " + q + ".");
+        //     } else {
+        //         alert("Sorry, Table " + tablenum + " is already sold.");
+        //     }
+        //     return false;
+        // }
         // If we made it this far, we actually have an order!
         order[tablenum]["sold-individually"] = soldindividually;
         if (soldindividually) {
@@ -147,7 +170,7 @@ function table_sales_checkout() {
         } else {
             order[tablenum]["cost"] = TABLE_SALES_PER_TABLE;
         }
-        order[tablenum]["lineitem"] = "\tTable " + tablenum + " (" + quantity + " seats)\t$" + order[tablenum]["cost"] + "\n";
+        order[tablenum]["lineitem"] = "\tTable " + tablenum + " (" + quantity + (soldindividually ? " seats" : " table") + ")\t$" + order[tablenum]["cost"] + "\n";
     }
     // Print out the line items, and add up the total, and confirm with user.
     var total = 0;
@@ -156,7 +179,7 @@ function table_sales_checkout() {
         msg += order[tablenum]["lineitem"];
         total += order[tablenum]["cost"];
     }
-    msg += "Total: $" + total + "\n\nBy clicking OK, you are officially placing your reservation.";
+    msg += "Total: $" + total + "\n\nBy Click OK to place your reservation and proceed to PayJunction for checkout.";
     if (!confirm(msg)) {
         return false;
     }
