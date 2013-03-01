@@ -170,6 +170,55 @@ function table_sales_reserve() {
   exit;
 }
 
+add_action('wp_ajax_table_sales_mark_paid', 'table_sales_mark_paid');
+add_action('wp_ajax_nopriv_table_sales_mark_paid', 'table_sales_mark_paid');
+function table_sales_mark_paid() {
+  if (!isset($_POST['res']) || !isset($_POST['val'])) {
+    print json_encode(array("errormessage" => "Internal error. Please try again."));
+    exit;
+  }
+  $res = $_POST['res'];
+  $val = $_POST['val'];
+
+  global $wpdb;
+  $table_name = $wpdb->prefix . "table_sales_res";
+  $success = $wpdb->update($table_name,
+                           array('paid' => $val),
+                           array('id' => $res),
+                           "%d",
+                           "%d");
+  if ($success < 1) {
+    print json_encode(array("errormessage" => "There was an error updating paid status. Please double-check it and try again if needed."));
+    exit;
+  } else if ($success > 1) {
+    print json_encode(array("errormessage" => "Multiple reservations updated. Call Mikey!"));
+    exit;
+  }
+  print json_encode(array("res" => $res, "val" => $val));
+  exit;
+}
+
+add_action('wp_ajax_table_sales_cancel', 'table_sales_cancel');
+add_action('wp_ajax_nopriv_table_sales_cancel', 'table_sales_cancel');
+function table_sales_cancel() {
+  if (!isset($_POST['res'])) {
+    print json_encode(array("errormessage" => "Internal error. Please try again."));
+    exit;
+  }
+  $res = $_POST['res'];
+
+  global $wpdb;
+  $table_res = $wpdb->prefix . "table_sales_res";
+  $table_tables = $wpdb->prefix . "table_sales_res";
+  $table_item = $wpdb->prefix . "table_sales_res";
+  // Delete the res.
+  // Delete the items.
+  // Add back availability.
+  print json_encode(array("res" => $res));
+  exit;
+}
+
+
 /** Front-end **/
 
 function table_sales_dropdown($n) {
@@ -242,5 +291,34 @@ function table_sales() {
   $ret .= '</tr>';
   $ret .= '<tr><td colspan="4" style="text-align:right"><input type="button" onclick="table_sales_precheckout()" value="Checkout via PayJunction"></td></tr>';
   $ret .= '</table></form></div>';
+  return $ret;
+}
+
+add_shortcode('table-sales-manage', 'table_sales_manage');
+function table_sales_manage() {
+  $ret = '';
+  global $wpdb;
+  $table_res = $wpdb->prefix . "table_sales_res";
+  $table_item = $wpdb->prefix . "table_sales_item";
+
+  $reservations = $wpdb->get_results("SELECT * FROM  $table_res ORDER BY time");
+  $ret .= "<table>";
+  $ret .= "<tr><th>Name</th><th>Email</th><th>Phone</th><th>Order</th><th>Paid?</th><th>Mark Paid</th><th>Cancel</th></tr>";
+  foreach ($reservations as $res) {
+    $paidattrs = sprintf('id="table-sales-%d-paid" style="color: %s"',
+                         $res->id, $res->paid ? "green" : "red");
+    $paid = $res->paid ? 'Paid' : 'Unpaid';
+    $marktext = $res->paid ? "Mark Unpaid" : "Mark Paid";
+    $mark = sprintf('<input id="table-sales-%d-paid-button" type="button" onclick="table_sales_mark_paid(%s, %d)" value="%s" />',
+                    $res->id,
+                    $res->id,
+                    $res->paid ? 0 : 1,
+                    $res->paid ? "Mark Unpaid" : "Mark Paid");
+    $cancel = sprintf('<input type="button" onclick="table_sales_cancel_res(%d)" value="Cancel" />',
+                      $res->id);
+    $trid = sprintf('id="table-sales-res-%d"', $res->id);
+    $ret .= "<tr $trid><td>$res->name</td><td>$res->email</td><td>$res->phone</td><td>Order</td><td $paidattrs>$paid</td><td>$mark</td><td>$cancel</td></tr>";
+  }
+  $ret .= "</table>";
   return $ret;
 }

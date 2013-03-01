@@ -199,3 +199,39 @@ function table_sales_checkout(data) {
     // Get PayJunction crap ready.
     // jQuery('#table-sales-cart').submit();
 }
+
+function table_sales_mark_paid(res, val) {
+    jQuery.post(table_sales_script.ajaxurl, {action: 'table_sales_mark_paid', res: res, val: val}, function(data) {
+        if ('errormessage' in data) {
+            alert(data.errormessage);
+            return false;
+        }
+        var res = data.res;
+        var val = parseInt(data.val);
+        
+        // Update "Paid?" column.
+        jQuery("#table-sales-" + res + "-paid").css("color", val ? "green" : "red").text(val ? "Paid" : "Unpaid");
+        // Update "Mark Paid" button.
+        var onclick = 'table_sales_mark_paid(' + res + ', ' + (1 - val) + ')';
+        var text = val ? "Mark Unpaid" : "Mark Paid";
+        jQuery("#table-sales-" + res + "-paid-button").attr("onclick", onclick).attr("value", text);
+    }, 'json');
+}
+
+function table_sales_cancel(res) {
+    jQuery.post(table_sales_script.ajaxurl, {action: 'table_sales_cancel', res: res}, function(data) {
+        if ('errormessage' in data) {
+            alert(data.errormessage);
+            return false;
+        }
+        var res = data.res;
+        var val = parseInt(data.val);
+        
+        // Update "Paid?" column.
+        jQuery("#table-sales-" + res + "-paid").css("color", val ? "green" : "red").text(val ? "Paid" : "Unpaid");
+        // Update "Mark Paid" button.
+        var onclick = 'table_sales_mark_paid(' + res + ', ' + (1 - val) + ')';
+        var text = val ? "Mark Unpaid" : "Mark Paid";
+        jQuery("#table-sales-" + res + "-paid-button").attr("onclick", onclick).attr("value", text);
+    }, 'json');
+}
