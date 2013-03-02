@@ -1,5 +1,5 @@
 var TABLE_SALES_NUM_TABLES = 42;
-var TABLE_SALES_PER_SEAT = 100;
+var TABLE_SALES_PER_SEAT = 50;
 var TABLE_SALES_PER_TABLE = 1000;
 var tables = null;
 
@@ -74,7 +74,7 @@ function table_sales_update_row(select) {
         col.text(individual ? "Yes" : "No");
         // Cost
         col = col.next();
-        col.text(individual ? "$100 per Seat" : "$1000 per Table");
+        col.text(individual ? ("$" + TABLE_SALES_PER_SEAT + " per Seat") : ("$" + TABLE_SALES_PER_TABLE  + " per Table"));
         // Quantity
         col = col.next();
         var max = individual ? available : Math.min(available, 1);
