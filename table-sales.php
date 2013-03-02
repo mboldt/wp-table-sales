@@ -314,7 +314,7 @@ function table_sales() {
   return $ret;
 }
 
-add_shortcode('table-sales-manage', 'table_sales_manage');
+add_shortcode('manage-table-sales', 'table_sales_manage');
 function table_sales_manage() {
   $ret = '';
   global $wpdb;
